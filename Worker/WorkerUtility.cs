@@ -17,7 +17,7 @@ namespace Worker
         private static string uploadApi = "https://api.imagga.com/v2/uploads";
         private static string gettingTagsApi = "https://api.imagga.com/v2/tags";
 
-        public static async Task<TaggingJobResult> GetImageTags(string imageUri)
+        public static async Task<TaggingJobResult> GetImageTags(string imageUri, int jobId)
         {
             try 
             {
@@ -29,10 +29,10 @@ namespace Worker
 
                 var taggingResponse = GetTags(uploadId, basicAuthValue);
 
-                return new TaggingJobResult(taggingResponse.Result, FinalState.Succeeded, string.Empty);
+                return new TaggingJobResult(taggingResponse.Result, FinalState.Succeeded, string.Empty, jobId);
             } catch (Exception e)
             {
-                return new TaggingJobResult(string.Empty, FinalState.Error, e.Message.ToString());
+                return new TaggingJobResult(string.Empty, FinalState.Error, e.Message.ToString(), jobId);
             }
         }
 

@@ -7,6 +7,8 @@
     <Parameter Name="Orchestrator_TargetReplicaSetSize" DefaultValue="3" />
     <Parameter Name="Client_ASPNETCORE_ENVIRONMENT" DefaultValue="" />
     <Parameter Name="Client_InstanceCount" DefaultValue="-1" />
+    <Parameter Name="PartitionLowKey" DefaultValue="0" />
+    <Parameter Name="PartitionHighKey" DefaultValue="0" />
   </Parameters>
   <!-- Import the ServiceManifest from the ServicePackage. The ServiceManifestName and ServiceManifestVersion 
        should match the Name and Version attributes of the ServiceManifest element defined in the 
@@ -39,7 +41,7 @@
     </Service>
     <Service Name="Orchestrator" ServicePackageActivationMode="ExclusiveProcess">
       <StatefulService ServiceTypeName="OrchestratorType" TargetReplicaSetSize="[Orchestrator_TargetReplicaSetSize]" MinReplicaSetSize="[Orchestrator_MinReplicaSetSize]">
-        <UniformInt64Partition PartitionCount="[Orchestrator_PartitionCount]" LowKey="-9223372036854775808" HighKey="9223372036854775807" />
+        <UniformInt64Partition PartitionCount="[Orchestrator_PartitionCount]" LowKey="0" HighKey="1" />
       </StatefulService>
     </Service>
     <Service Name="Client" ServicePackageActivationMode="ExclusiveProcess">

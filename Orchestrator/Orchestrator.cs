@@ -20,6 +20,7 @@ namespace Orchestrator
     /// </summary>
     internal sealed class Orchestrator : StatefulService, IOrchestrator
     {
+        private static string WorkerServiceName = "fabric:/VideoClassifier/Worker";
         public Orchestrator(StatefulServiceContext context)
             : base(context)
         { }
@@ -79,7 +80,6 @@ namespace Orchestrator
             // TODO: Replace the following sample code with your own logic 
             //       or remove this RunAsync override if it's not needed in your service.
 
-            var myDictionary = await this.StateManager.GetOrAddAsync<IReliableDictionary<string, long>>("myDictionary");
             var allTasks = await this.StateManager.GetOrAddAsync<IReliableDictionary<Guid, JobObject>>("allTasks");
             var tasksQueue = await this.StateManager.GetOrAddAsync<IReliableQueue<Guid>>("tasksQueue");
 
@@ -89,20 +89,16 @@ namespace Orchestrator
 
                 using (var tx = this.StateManager.CreateTransaction())
                 {
-                    var result = await myDictionary.TryGetValueAsync(tx, "Counter");
                     var nextTask = await tasksQueue.TryDequeueAsync(tx);
 
                     if(nextTask.Value != Guid.Empty)
                     {
                         var task = allTasks.TryGetValueAsync(tx, nextTask.Value);
                         task.Result.Value.State = JobState.Started;
+                        ServiceEventSource.Current.ServiceMessage(this.Context, $"Orchestrator {this.Context.PartitionId} recived a job. Video URI: {task.Result.Value.VideoUri}");
+
                         await ProcessJob(task.Result.Value.VideoUri, nextTask.Value);
                     }
-
-                    ServiceEventSource.Current.ServiceMessage(this.Context, "Current Counter Value: {0}",
-                        result.HasValue ? result.Value.ToString() : "Value does not exist.");
-
-                    await myDictionary.AddOrUpdateAsync(tx, "Counter", 0, (key, value) => ++value);
 
                     // If an exception is thrown before calling CommitAsync, the transaction aborts, all changes are 
                     // discarded, and nothing is saved to the secondary replicas.
@@ -115,7 +111,9 @@ namespace Orchestrator
 
         private async Task ProcessJob(string videoUri, Guid taskId)
         {
+            ServiceEventSource.Current.ServiceMessage(this.Context, $"Orchestrator {this.Context.PartitionId} - extracting keyframes in progress.");
             var fileName = await Utility.GetVideoThumbnails(videoUri);
+            ServiceEventSource.Current.ServiceMessage(this.Context, $"Orchestrator {this.Context.PartitionId} - extracting keyframes finised.");
             //get all Thumbnails from the output folder
             var thumbnails = Utility.GetListOfThumbnails(fileName);
 
@@ -123,15 +121,14 @@ namespace Orchestrator
             thumbnails = Utility.ReduceNumberOfThumbnails(thumbnails);
             Dictionary<int, string> thumbnailList = PrepareThumbnails(thumbnails);
 
-            var serviceUri = new Uri("fabric:/VideoClassifier/Worker");
             List<string> results = new List<string>();
-            var workerProxy = ServiceProxy.Create<IWorker>(serviceUri);
 
             List<Task<TaggingJobResult>> allTasks = new List<Task<TaggingJobResult>>();
             List<Task<TaggingJobResult>> failedTasks = new List<Task<TaggingJobResult>>();
             foreach (var task in thumbnailList)
             {
-                var t = new Task<TaggingJobResult>(() => workerProxy.StartJob(task.Key, task.Value).Result);
+                var t = new Task<TaggingJobResult>(() => ServiceProxy.Create<IWorker>(new Uri(WorkerServiceName))
+                                                            .StartJob(task.Key, task.Value).Result);
                 t.Start();
                 allTasks.Add(t);
             }
@@ -149,10 +146,11 @@ namespace Orchestrator
 
             while (failedTaskCount > 0)
             {
-                allTasks = RunFailedTasks(allTasks, thumbnailList, workerProxy, results);
+                allTasks = RunFailedTasks(allTasks, thumbnailList, results);
                 failedTaskCount = allTasks.Where(a => a.Result.ResultCode == FinalState.Error).Count();
             }
 
+            var workerProxy = ServiceProxy.Create<IWorker>(new Uri(WorkerServiceName));
             var videoTags = await workerProxy.GetRelevantTags(results);
 
             using (var tx = this.StateManager.CreateTransaction())
@@ -181,7 +179,7 @@ namespace Orchestrator
             return thumbnailsList;
         }
 
-        private List<Task<TaggingJobResult>> RunFailedTasks(List<Task<TaggingJobResult>> allTasks, Dictionary<int, string> thumbnailList, IWorker workerProxy, List<string> results)
+        private List<Task<TaggingJobResult>> RunFailedTasks(List<Task<TaggingJobResult>> allTasks, Dictionary<int, string> thumbnailList, List<string> results)
         {
             var failedTasks = new List<Task<TaggingJobResult>>();
 
@@ -190,6 +188,7 @@ namespace Orchestrator
                 if(t.Result.ResultCode == FinalState.Error)
                 {
                     string thumbnail;
+                    var workerProxy = ServiceProxy.Create<IWorker>(new Uri(WorkerServiceName));
                     thumbnailList.TryGetValue(t.Result.TaskId, out thumbnail);
                     var newTask = new Task<TaggingJobResult>(() => workerProxy.StartJob(t.Result.TaskId, thumbnail).Result);
                     failedTasks.Add(newTask);

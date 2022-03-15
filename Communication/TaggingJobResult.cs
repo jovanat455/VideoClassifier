@@ -15,15 +15,17 @@ namespace Communication
         public  FinalState ResultCode { get; set; }
         [DataMember]
         public string Error { get; set; }
+        [DataMember]
         public int TaskId { get; set; }
 
         public TaggingJobResult() { }
 
-        public TaggingJobResult(string Tags, FinalState ResultCode, string Error)
+        public TaggingJobResult(string Tags, FinalState ResultCode, string Error, int TaskId)
         {
             this.Tags = Tags;
             this.ResultCode = ResultCode;
             this.Error = Error;
+            this.TaskId = TaskId;
         }
     }
 }

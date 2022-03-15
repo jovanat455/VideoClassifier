@@ -36,7 +36,6 @@ namespace Client.Controllers
         [HttpPost]
         public async Task<IActionResult> ProcessRequest(string uploadedfileName)
         {
-            var watch = System.Diagnostics.Stopwatch.StartNew();
             flag = true;
             ViewBag.flagvalue = flag;
             string prefix = @"D:\testSet\";
@@ -52,17 +51,14 @@ namespace Client.Controllers
                     {
                         return new ContentResult { StatusCode = 404, Content = "There's no available replica. Please check service status." };
                     }
-
-                    ServicePartitionKey key = new ServicePartitionKey(((Int64RangePartitionInformation)(partitions[0].PartitionInformation)).LowKey);
+                    int partitionId = uploadedfileName.Length % 2;
+                    ServicePartitionKey key = new ServicePartitionKey(partitionId);
 
                     var statefullProxy = ServiceProxy.Create<IOrchestrator>(serviceUri, key);
 
                     var testResult = await statefullProxy.GetVideoTags(path);
-                    var result = new Result(); result.Message = "Jotodoro_test";
+                    var result = new Result();
                     result.AllTags = testResult;
-                    watch.Stop();
-                    var elapsedMs = watch.ElapsedMilliseconds;
-                    result.Message = $"Execution time {elapsedMs}";
                     return View("~/Views/Home/Index.cshtml", result);
                 }
                 catch (Exception ex)

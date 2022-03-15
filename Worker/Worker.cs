@@ -23,11 +23,9 @@ namespace Worker
 
         public async Task<TaggingJobResult> StartJob(int jobId, string imageUri)
         {
-            //using StreamWriter file = new StreamWriter($@"D:\testSet\output\{Guid.NewGuid()}_taskId_{jobId}.txt", append: true);
-            //file.WriteLine($"Task Id: {jobId} worker: {this.Context.InstanceId}");
-
-            var response = await WorkerUtility.GetImageTags(imageUri);
-            response.TaskId = jobId;
+            ServiceEventSource.Current.ServiceMessage(this.Context, $"Worker {this.Context.InstanceId} - started a jod with id {jobId}.");
+            var response = await WorkerUtility.GetImageTags(imageUri, jobId);
+            ServiceEventSource.Current.ServiceMessage(this.Context, $"Worker {this.Context.InstanceId} - finished a jod with id {jobId}. Final state: {response.ResultCode}");
             return response;
         }
 
@@ -55,13 +53,13 @@ namespace Worker
             // TODO: Replace the following sample code with your own logic 
             //       or remove this RunAsync override if it's not needed in your service.
 
-            long iterations = 0;
+            //long iterations = 0;
 
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                ServiceEventSource.Current.ServiceMessage(this.Context, "Working-{0}", ++iterations);
+                //ServiceEventSource.Current.ServiceMessage(this.Context, "Working-{0}", ++iterations);
 
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
